@@ -1,0 +1,14 @@
+version: '3.9'
+
+services:
+  database:
+    image: postgres:latest
+    container_name: blogger_ai
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=admin
+      - POSTGRES_DB=blogger_ai
+    ports:
+      - "5432:5432"
+    restart:
+        unless-stopped
