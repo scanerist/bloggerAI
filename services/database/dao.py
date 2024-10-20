@@ -80,7 +80,7 @@ async def set_instruction(session, text: str, user_id: int):
 @connection
 async def get_source_channel_by_id(session, user_id: int):
     try:
-        source_channel = await session.scalar(select(User).filter_by(id=user_id))
+        source_channel = await session.scalar(select(SourceChannel.channel_name).filter_by(user_id=user_id))
         if not source_channel:
             logger.error(f"Source channel  not found in the database")
             return None
@@ -92,7 +92,7 @@ async def get_source_channel_by_id(session, user_id: int):
 @connection
 async def get_destination_channel_by_id(session, user_id: int):
     try:
-        destination_channel = await session.scalar(select(User).filter_by(id=user_id))
+        destination_channel = await session.scalar(select(DestinationChannel.channel_name).filter_by(user_id=user_id))
         if not destination_channel:
             logger.error(f"Destination channel  not found in the database")
             return None

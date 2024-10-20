@@ -12,8 +12,6 @@ async def process_channel_list(callback_query: types.CallbackQuery, state: FSMCo
     source_channels = list(await get_all_source_channels_by_user_id(callback_query.from_user.id))
     destination_channels = list(await get_all_destination_channels_by_user_id(callback_query.from_user.id))
     instructions = list(await get_all_instructions_by_user_id(callback_query.from_user.id))
-    print(source_channels)
-    print(destination_channels)
     if not source_channels or not destination_channels or not instructions:
         await callback_query.message.answer( "Список каналов пуст.", reply_markup=back_button())
         return

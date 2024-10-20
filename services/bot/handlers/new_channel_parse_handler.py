@@ -1,12 +1,12 @@
 import asyncio
 
 from handlers import start_handler
-from services.bot.bot_utils import process_next_post, send_content_message
+from services.bot.bot_utils import process_next_post, send_content_message, monitor_channel_and_notify
 from services.bot.state_manager import Form
 from services.shared.logger import setup_logger
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
-from services.database.dao import set_user, set_source_channel, set_destination_channel, set_instruction, get_message_id_from_source_channel_by_user_id
+from services.database.dao import set_user, set_source_channel, set_destination_channel, set_instruction, get_message_id_from_source_channel_by_user_id, get_source_channel_by_id, get_destination_channel_by_id
 from services.pyrogram_service.pyrogram_client import PyrogramService
 
 new_channel_router = Router()
@@ -40,7 +40,6 @@ async def process_destination_channel(message: types.Message, state: FSMContext)
         if member.status in ('administrator', 'creator'):
             data = await state.get_data()
             await message.answer("Вы являетесь администратором канала. Теперь введите инструкцию для изменения поста.")
-            print(str(data.get('instruction')), str(data.get('source_channel')), str(data.get('destination_channel')), str(data.get('last_processed_message_id')))
             await set_destination_channel(destination_channel_name, user_id)
             await state.update_data(destination_channel=destination_channel_name)
             await state.set_state(Form.user_instruction)
@@ -57,13 +56,18 @@ async def process_user_instruction(message: types.Message, state: FSMContext):
     await state.update_data(instruction=instruction_content)
     await process_next_post(message, state)
 
+    await asyncio.create_task(
+        monitor_channel_and_notify(message, state, data.get('source_channel'), data.get('destination_channel'),
+                                   message.from_user.id))
+
 
 @new_channel_router.callback_query(F.data == "publish")
 async def process_publish(callback_query: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
-    destination_channel = data.get('destination_channel')
+    destination_channel = await get_destination_channel_by_id(callback_query.from_user.id) if data.get('destination_channel') is None else data.get('destination_channel')
     modified_content = data.get('modified_content')
-    last_message = await pyrogram_service.get_last_message(data.get('source_channel'))
+    source_channel_name = await get_source_channel_by_id(callback_query.from_user.id) if data.get('source_channel') is None else data.get('source_channel')
+    last_message = await pyrogram_service.get_last_message(source_channel_name)
     if not destination_channel or not modified_content:
         await callback_query.message.answer(f"Ошибка публикации: не найдены данные. {data}")
         return
