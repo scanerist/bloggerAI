@@ -24,14 +24,14 @@ async def set_user(session, username: str, user_tg_id: int):
         return e
 
 @connection
-async def set_source_channel(session, channel_name: str, user_id: int):
+async def set_source_channel(session, channel_name: str, user_id: int, last_processed_message_id: int = 0):
     try:
         user = await session.scalar(select(User).filter_by(id=user_id))
         if not user:
             logger.error(f"User with id {user_id} not found in the database")
             return None
-        source_channel = SourceChannel(channel_name=channel_name, user_id=user_id)
-        if await session.scalar(select(SourceChannel).filter_by(channel_name=channel_name)):
+        source_channel = SourceChannel(channel_name=channel_name, user_id=user_id, last_processed_message_id=last_processed_message_id)
+        if await session.scalar(select(SourceChannel).filter_by(channel_name=channel_name)) and await session.scalar(select(SourceChannel).filter_by(user_id=user_id)):
             logger.info(f"Source channel {channel_name} already exists in the database")
             return source_channel
         session.add(source_channel)
@@ -196,5 +196,32 @@ async def delete_instruction(session, text: str):
         return None
     except SQLAlchemyError as e:
         logger.error(f"Error while deleting instruction {text} from the database: {e}")
+        return e
+
+@connection
+async def update_source_channel(session, channel_name: str, last_processed_message_id: int):
+    try:
+        source_channel = await session.scalar(select(SourceChannel).filter_by(channel_name=channel_name))
+        if not source_channel:
+            logger.error(f"Source channel {channel_name} not found in the database")
+            return None
+        source_channel.last_processed_message_id = last_processed_message_id
+        await session.commit()
+        logger.info(f"Source channel {channel_name} updated in the database")
+        return None
+    except SQLAlchemyError as e:
+        logger.error(f"Error while updating source channel {channel_name} in the database: {e}")
+        return e
+
+@connection
+async def get_message_id_from_source_channel_by_user_id(session, channel_name: str, user_id: int):
+    try:
+        source_channel = await session.scalar(select(SourceChannel).filter_by(channel_name=channel_name, user_id=user_id))
+        if not source_channel:
+            logger.error(f"Source channel {channel_name} not found in the database")
+            return None
+        return source_channel.last_processed_message_id
+    except SQLAlchemyError as e:
+        logger.error(f"Error while getting message id from source channel {channel_name} from the database: {e}")
         return e
 

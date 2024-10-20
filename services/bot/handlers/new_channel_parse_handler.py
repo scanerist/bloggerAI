@@ -6,7 +6,7 @@ from services.bot.state_manager import Form
 from services.shared.logger import setup_logger
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
-from services.database.dao import set_user, set_source_channel, set_destination_channel, set_instruction
+from services.database.dao import set_user, set_source_channel, set_destination_channel, set_instruction, get_message_id_from_source_channel_by_user_id
 from services.pyrogram_service.pyrogram_client import PyrogramService
 
 new_channel_router = Router()
@@ -24,8 +24,10 @@ async def process_new_channel(callback_query: types.CallbackQuery, state: FSMCon
 async def process_source_channel(message: types.Message, state: FSMContext):
     source_channel_name = message.text.strip()
     data = await state.get_data()
-    source_channel = await set_source_channel(source_channel_name, message.from_user.id)
     await state.update_data(source_channel=source_channel_name)
+    current_message_id_of_source_channel = await get_message_id_from_source_channel_by_user_id(source_channel_name, message.from_user.id)
+    await state.update_data(last_processed_message_id=current_message_id_of_source_channel)
+    await set_source_channel(channel_name=source_channel_name, user_id=message.from_user.id)
     await message.answer("Введите логин канала для публикации (например, @destination_channel):")
     await state.set_state(Form.destination_channel)
 
@@ -38,22 +40,20 @@ async def process_destination_channel(message: types.Message, state: FSMContext)
         if member.status in ('administrator', 'creator'):
             data = await state.get_data()
             await message.answer("Вы являетесь администратором канала. Теперь введите инструкцию для изменения поста.")
-            destination_channel = await set_destination_channel(destination_channel_name, user_id)
+            print(str(data.get('instruction')), str(data.get('source_channel')), str(data.get('destination_channel')), str(data.get('last_processed_message_id')))
+            await set_destination_channel(destination_channel_name, user_id)
             await state.update_data(destination_channel=destination_channel_name)
             await state.set_state(Form.user_instruction)
         else:
             await message.answer("Вы не администратор этого канала.", )
-            await state.clear()
     except Exception as e:
-        await message.answer(f"Ошибка проверки: {e}")
-        await state.clear()
+        await message.answer(f"Ошибка проверки формата, попробуйте снова")
 
 @new_channel_router.message(Form.user_instruction)
 async def process_user_instruction(message: types.Message, state: FSMContext):
-    instruction = message.text.strip()
     data = await state.get_data()
     instruction_content = message.text.strip()
-    instruction = await set_instruction(instruction_content, message.from_user.id)
+    await set_instruction(instruction_content, message.from_user.id)
     await state.update_data(instruction=instruction_content)
     await process_next_post(message, state)
 
@@ -61,7 +61,6 @@ async def process_user_instruction(message: types.Message, state: FSMContext):
 @new_channel_router.callback_query(F.data == "publish")
 async def process_publish(callback_query: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
-
     destination_channel = data.get('destination_channel')
     modified_content = data.get('modified_content')
     last_message = await pyrogram_service.get_last_message(data.get('source_channel'))

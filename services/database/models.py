@@ -14,6 +14,7 @@ class SourceChannel(Base):
     __tablename__ = 'source_channels'
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     channel_name: Mapped[str] = mapped_column(String, nullable=False)
+    last_processed_message_id: Mapped[int] = mapped_column(Integer, default=None)
     user_id: Mapped[int] = mapped_column(ForeignKey('users.id'))
 
     user : Mapped[list["User"]] = relationship('User', back_populates='source_channels')
