@@ -1,6 +1,6 @@
 import asyncio
 
-from handlers import start_handler
+from services.bot.handlers.start_handler import start_handler
 from services.bot.bot_utils import process_next_post, send_content_message, monitor_channel_and_notify
 from services.bot.state_manager import Form
 from services.shared.logger import setup_logger
@@ -15,6 +15,8 @@ pyrogram_service = PyrogramService.get_instance()
 
 @new_channel_router.callback_query(F.data == "new_channel")
 async def process_new_channel(callback_query: types.CallbackQuery, state: FSMContext):
+    # подозрительная инструкция:
+    #  Для чего удаляется сообщение из чата при добавлении нового канала?
     await callback_query.message.bot.delete_message(callback_query.message.chat.id, callback_query.message.message_id)
     user = await set_user(username=callback_query.from_user.username, user_tg_id=callback_query.from_user.id)
     await callback_query.message.answer("Введите логин исходного канала (например, @source_channel):")
