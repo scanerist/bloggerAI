@@ -1,6 +1,14 @@
+from collections.abc import AsyncGenerator
 
 from pyrogram import Client
+import pyrogram.types as pyg_types
+
 from services.shared.config import Config
+from services.shared.logger import setup_logger
+
+logger = setup_logger(__name__)
+
+LIMIT_NUM_MESSAGES = 20
 
 class PyrogramService:
     _instance = None
@@ -25,9 +33,14 @@ class PyrogramService:
     async def stop(self):
         await self.client.stop()
 
-    async def get_last_message(self, channel: str):
+    async def get_last_message(self, channel: str) -> pyg_types.Message:
         async for message in self.client.get_chat_history(channel, limit=1):
             return message
+        
+    async def get_last_messages(self, channel: str, last_id: int, limit: int=LIMIT_NUM_MESSAGES) -> AsyncGenerator[pyg_types.Message]:
+        async for message in self.client.get_chat_history(channel, offset_id=last_id, limit=limit):
+            logger.info(f"message: {message}")
+            yield message
 
     async def send_message(self, channel: str, text: str, photo=None, video=None, audio=None, voice=None):
         if photo:
