@@ -1,6 +1,7 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, BigInteger
+from sqlalchemy import Integer, String, ForeignKey, BigInteger
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from services.database.db import Base
+from services.database import validators
 
 class User(Base):
     __tablename__ = 'users'
@@ -10,7 +11,7 @@ class User(Base):
     destination_channels : Mapped[list["DestinationChannel"]] = relationship('DestinationChannel', back_populates='user', cascade='all, delete-orphan')
     instructions: Mapped[list["Instruction"]] = relationship('Instruction', back_populates='user', cascade='all, delete-orphan')
 
-class SourceChannel(Base):
+class SourceChannel(Base, validators.ChannelValidatorMixin):
     __tablename__ = 'source_channels'
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     channel_name: Mapped[str] = mapped_column(String, nullable=False)
@@ -19,7 +20,7 @@ class SourceChannel(Base):
 
     user : Mapped[list["User"]] = relationship('User', back_populates='source_channels')
 
-class DestinationChannel(Base):
+class DestinationChannel(Base, validators.ChannelValidatorMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     __tablename__ = 'destination_channels'
     channel_name: Mapped[str] = mapped_column(String, nullable=False)
@@ -34,4 +35,5 @@ class Instruction(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey('users.id'))
 
     user = relationship('User', back_populates='instructions')
+
 

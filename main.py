@@ -26,11 +26,9 @@ async def start_bot():
 
 async def main():
 
-    
     pyrogram_service = PyrogramService.get_instance()
     await pyrogram_service.start()
     logger.info("Pyrogram service started")
-
 
     dp.include_router(start_handler.start_router)
     dp.include_router(new_channel_parse_handler.new_channel_router)
@@ -48,9 +46,6 @@ async def main():
         except RequestException as e:
             logger.info(f"Conncetion failed - {e}. Need to wait 30 seconds...")
             time.sleep(30)
-
-
-
 
 
 if __name__ == "__main__":
