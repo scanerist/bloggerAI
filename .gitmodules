@@ -1,0 +1,4 @@
+[submodule "bloggerAI"]
+	path = bloggerAI
+	url = https://github.com/scanerist/bloggerAI.git
+	branch = base_features
