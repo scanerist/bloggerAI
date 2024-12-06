@@ -15,8 +15,6 @@ pyrogram_service = PyrogramService.get_instance()
 
 @new_channel_router.callback_query(F.data == "new_channel")
 async def process_new_channel(callback_query: types.CallbackQuery, state: FSMContext):
-    # подозрительная инструкция:
-    #  Для чего удаляется сообщение из чата при добавлении нового канала?
     await callback_query.message.bot.delete_message(callback_query.message.chat.id, callback_query.message.message_id)
     user = await set_user(username=callback_query.from_user.username, user_tg_id=callback_query.from_user.id)
     await callback_query.message.answer("Введите логин исходного канала (например, @source_channel):")
@@ -68,6 +66,7 @@ async def process_publish(callback_query: types.CallbackQuery, state: FSMContext
     data = await state.get_data()
     destination_channel = await get_destination_channel_by_id(callback_query.from_user.id) if data.get('destination_channel') is None else data.get('destination_channel')
     modified_content = data.get('modified_content')
+    logger.info(f"Destination channel: {destination_channel}, data: {data}")
     source_channel_name = await get_source_channel_by_id(callback_query.from_user.id) if data.get('source_channel') is None else data.get('source_channel')
     last_message = await pyrogram_service.get_last_message(source_channel_name)
     if not destination_channel or not modified_content:
@@ -76,11 +75,9 @@ async def process_publish(callback_query: types.CallbackQuery, state: FSMContext
     try:
         await send_content_message(destination_channel, modified_content, last_message)
         msg = await callback_query.message.edit_text("Пост опубликован!")
-        await state.clear()
+        #await state.clear()
         await start_handler(callback_query.message, state)
         await asyncio.sleep(5)
         await msg.delete()
     except Exception as e:
         await callback_query.message.answer(f"Ошибка публикации: {e}")
-
-
