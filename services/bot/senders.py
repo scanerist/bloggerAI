@@ -293,7 +293,7 @@ async def send(message: types.Message, last_message: pyg_types.Message, reply_ma
         except TelegramNetworkError as e: 
             
             logger.info(f"Произошла ошибка о время отправки одиночного сообщения: {e}. Полуминутная пауза...")
-            if "Request Entity Too Large" in e:
+            if "Request Entity Too Large" in e.message:
                 logger.warning(
                     f"Не удалось отправить сообщение {last_message}, id {last_message.id}."\
                     "Слишком большой размер отправляемого контента"
