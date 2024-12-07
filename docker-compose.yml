@@ -3,7 +3,7 @@ version: '3.9'
 services:
   database:
     image: postgres:latest
-    container_name: blogger_ai
+    container_name: blogger_ai_debug
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=admin
@@ -13,6 +13,7 @@ services:
     restart:
         unless-stopped
   bot:
+    container_name: bot_ai_debug
     build:
       context: .
       dockerfile: Dockerfile
