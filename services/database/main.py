@@ -12,18 +12,17 @@ async def create_db():
     while True:
         try:
             async with engine.begin() as conn:
-                #await conn.run_sync(Base.metadata.drop_all)
                 await conn.run_sync(Base.metadata.create_all)
                 
         except RuntimeError as e:
-            print(f"ОШИБКА СОЕДИНЕНИЯ {e}. ПОВТОРНАЯ ПОПЫТКА СОЕДИНЕНИЯ")
+            print(f"CONNECTION ERROR {e}. TRY TO RE-CONNECT AGAIN...")
             time.sleep(2)
             continue
         except OperationalError as e:
-            print(f"ОПЕРАЦИЯ ЗАВЕРШИЛАСЬ С ОШИБКОЙ {e}")
+            print(f"OPERATION WAS ENDED WITH ERROR: {e}")
             break
         else:
-            print("СОЕДИНЕНИЕ УСТАНОВЛЕНО")
+            print("CONNECTION COMPLETE")
             break
 
 if __name__ == "__main__":

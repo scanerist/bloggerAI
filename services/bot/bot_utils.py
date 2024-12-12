@@ -30,7 +30,10 @@ async def send_media_group(media_group: List[pyg_types.Message], state: FSMConte
                     chat_id=ME, media=media_group
                 )
             except Exception as e:
-                logger.info(f"При отправке сообщений медийной группы с id={media_group[0].media_group_id} произошла ошибка - {e}")
+                logger.info(
+                    f"While media group messages with media_group_id={media_group[0].media_group_id} "\
+                    f"are sending an error was occured - {e}"
+                )
             else:
                 await state.set_state(Form.approve_post)
                 break
@@ -64,10 +67,10 @@ async def process_next_post(message: types.Message, state: FSMContext, source_ch
             if last_message.id <= last_processed_message_id:
                 await send_media_group(media_group, state)
                 await message.answer(
-                    f"Все посты обработаны. Пропуск..."\
-                    f"Детали: из канала: {source_channel}, last_message_id: {last_message.id}, "\
-                    f"last processed message_id, записанное в state.data: {last_processed_message_id}"\
-                    f"message_id на вход метода `process_next_post` message.id {message.message_id}"
+                    f"All posts were processed. Pass..."\
+                    f"Details: from source channel: {source_channel}, last_message_id: {last_message.id}, "\
+                    f"last processed message_id, that recorded in state.data: {last_processed_message_id}"\
+                    f"message_id as a parameter of method `process_next_post` message.id {message.message_id}"
                 )
                 return
             offset = last_message.id
@@ -96,7 +99,7 @@ async def process_next_post(message: types.Message, state: FSMContext, source_ch
                 try: 
                     input = getattr(pyg_types, f"InputMedia{media.__class__.__name__}")
                 except AttributeError:
-                    logger.info(f"В текущей версии pyrogram класс {media.__name__} входного медиа не был найден")
+                    logger.info(f"Class input media named {media.__name__} wasn't found in the using version of pyrogram.")
                     continue
                 media_instance: pyg_types.InputMedia = input(media=media.file_id)
                 attached_text = last_message.text or last_message.caption
@@ -135,7 +138,7 @@ async def monitor_channel_and_notify(message: types.Message, state: FSMContext, 
         if last_message.id > last_processed_message_id:
             await process_next_post(message, state, source_channel)
             logger.info(
-                "Pyrogram обнаружил новое сообщение"\
+                "Pyrogram detect a new message"\
                 f"last message id is: {last_message.id},"\
                 f"last processed message id is: {last_processed_message_id},"\
                 f"message_id (from message at aiogram's input): {message.message_id},"\
@@ -143,7 +146,7 @@ async def monitor_channel_and_notify(message: types.Message, state: FSMContext, 
                 f"destination_channel: {destination_channel}"
             )
 
-            await message.answer(f"Новое сообщение обработано и отправлено в {destination_channel}")
+            await message.answer(f"New message was processed and sent to {destination_channel}")
 
         # Ждем 5 минут перед следующей проверкой
         await asyncio.sleep(60)

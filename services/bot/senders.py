@@ -52,7 +52,7 @@ class Base():
                 new_caption = new_caption.split(" ")
                 index, _ = list(re.finditer(r"[\s]+|[\S]+", new_caption))[-1].span()
                 new_caption = new_caption[:index]
-                logger.info(f"Новый заголовок: {new_caption} обрезан на позиции {index}, {new_caption[index]}")
+                logger.info(f"New caption: {new_caption} was cuted at pos. {index}, {new_caption[index]}")
 
         self.params["text"] = new_text
         self.params["caption"] = new_caption
@@ -86,9 +86,9 @@ class SendMethod(Base):
             method_name = self.last_message.media.value
             return getattr(self.message,  f"answer_{method_name}")
         except AttributeError as e:
-            raise ArithmeticError(
-                f"Нет метода {method_name} передачи сообщения в целевом модуле {e}."\
-                "Убедитесь, что версия aiogram >= 3.13"
+            raise AttributeError(
+                f"Method {method_name} of sending a message is absent in the using module - {e}."\
+                "Check aiogram version is v >= 3.13"
             )
 
 class Text(Base):
@@ -183,12 +183,12 @@ class File(SendMethod):
     
     async def __call__(self, media: pyg_types.Object):
         send_method = self.get_send_method()
-        #ПОУЧАЕТ ПУТЬ ФАЙЛА В СТРОКОВОМ ФОРМАТЕ:
-         #/code/src/downloads/photo_2024-11-20_13-52-12_7439358946990620672.jpg
+        #Get file path in the string:
+        #/code/src/downloads/photo_2024-11-20_13-52-12_7439358946990620672.jpg
         try:
             file_path = await self.get_binIO()
         except FileReferenceExpired:
-            logger.warning(f"Не удалось отправить сообщение. Истёк срок `file_id` вложенного контента")
+            logger.warning(f"Message wasn't sent. `file_id` of attached content was expired.")
             return
         file_name = file_path.split("/")[-1]
         file_bytes = b""
@@ -276,15 +276,15 @@ async def send(message: types.Message, last_message: pyg_types.Message, reply_ma
         class_name = last_message.media.value.title().replace("_", "")
         sender = globals().get(class_name, "Text")
     elif last_message.service:
-        logger.info(f"Пропуск служебного сообщения, id: {last_message.id}")
+        logger.info(f"Pass a service message, id: {last_message.id}")
         return
     elif last_message.empty:
-        logger.info(f"Пропуск пустого сообщения, id: {last_message.id}")
+        logger.info(f"Pass an empty message, id: {last_message.id}")
         return
     else:
         sender = Text
         if not last_message.text:
-            logger.info(f"Неопознанный тип сообщения {last_message}, id: {last_message.id}, будет использоваться текст.")
+            logger.info(f"Unrecognized type of message {last_message}, id: {last_message.id}, `Text` will be used for this one.")
 
     send = sender(message, last_message, reply_markup)
     while True:
@@ -292,17 +292,17 @@ async def send(message: types.Message, last_message: pyg_types.Message, reply_ma
             await send(media)
         except TelegramNetworkError as e: 
             
-            logger.info(f"Произошла ошибка о время отправки одиночного сообщения: {e}. Полуминутная пауза...")
+            logger.info(f"While a single message is sending an error was occured: {e}. Wait half a minute...")
             if "Request Entity Too Large" in e.message:
                 logger.warning(
-                    f"Не удалось отправить сообщение {last_message}, id {last_message.id}."\
-                    "Слишком большой размер отправляемого контента"
+                    f"Message {last_message} wasn't sent, id {last_message.id}."\
+                    "Too large size of sending attached content"
                 )
                 break
             time.sleep(30)
     
         except ValidationError as e:
-            logger.info(f"Ошибка в данных api. Детали: {e}") 
+            logger.info(f"It seems there is an error in api data. Details: {e}") 
             break
         else: 
             break
