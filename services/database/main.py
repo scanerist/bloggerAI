@@ -15,14 +15,14 @@ async def create_db():
                 await conn.run_sync(Base.metadata.create_all)
                 
         except RuntimeError as e:
-            print(f"CONNECTION ERROR {e}. TRY TO RE-CONNECT AGAIN...")
+            print(f"CONNECTION ERROR. DETAILS: {e}. TRY TO RE-CONNECT AGAIN...")
             time.sleep(2)
             continue
         except OperationalError as e:
-            print(f"OPERATION WAS ENDED WITH ERROR: {e}")
+            print(f"OPERATION WAS ENDED WITH AN ERROR: {e}")
             break
         else:
-            print("CONNECTION COMPLETE")
+            print("CONNECTION SUCCESS")
             break
 
 if __name__ == "__main__":
