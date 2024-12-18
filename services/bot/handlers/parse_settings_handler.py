@@ -1,6 +1,5 @@
 from services.bot.bot_utils import process_next_post
 from services.bot.state_manager import Form
-from services.shared.logger import setup_logger
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 

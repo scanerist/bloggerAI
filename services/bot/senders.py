@@ -1,3 +1,8 @@
+"""
+Template which allows to send single object of pyrogram.types.Message 
+throught aiogram.types.Message object
+"""
+
 import re
 import time
 
@@ -15,6 +20,12 @@ logger = setup_logger(__name__)
 pyrogram_service = PyrogramService.get_instance()
 
 class Base():
+    """
+    Class with functional, which sets basic parameters:
+    text attributes and `reply_markup` for sending messages
+    considering telegram api limitations and sends messages of 
+    pyrogram.types.Message throght aiogram
+    """
 
     def __init__(
             self, 
@@ -46,8 +57,7 @@ class Base():
             if len(self.caption) > 1024:
                 new_caption = self.caption.split(".")[0]
                 new_text = self.caption + "\n\b"
-                if self.text:
-                    new_text += self.text
+                new_text = new_text + self.text if self.text else new_text
             while len(new_caption) > 1024:
                 new_caption = new_caption.split(" ")
                 index, _ = list(re.finditer(r"[\s]+|[\S]+", new_caption))[-1].span()
@@ -69,6 +79,14 @@ class Base():
         await self.send(media, **kwargs)
 
 class SendMethod(Base):
+    """
+    Aim of this class is the same as `Base` except for 
+    this class for such single messages which includes 
+    additional media attribute than just only text
+
+    Applies for such types of messages which includes 
+    specific content besides the text
+    """
 
     async def __call__(self, media: pyg_types.Object, **kwargs):
         method = self.get_send_method()
@@ -82,6 +100,9 @@ class SendMethod(Base):
         )
 
     def get_send_method(self,) -> callable:
+        """
+        Seek sending method in aiogram.types.Message
+        """
         try:
             method_name = self.last_message.media.value
             return getattr(self.message,  f"answer_{method_name}")
@@ -172,9 +193,23 @@ class Venue(SendMethod):
         })
 
 class File(SendMethod):
+    """ 
+    This class do same work as `SendMethod` except for 
+    additional media content of such messages is file and supports
+    related i/o actions
 
-    async def get_binIO(self):
-        
+    Applies for such types of messages which includes a file.
+    """
+
+    async def get_file(self) -> str:
+        """
+        Download and save file at server
+
+        -------
+        Returns
+        file_path: str 
+                   File path
+        """
         return (
             await pyrogram_service.client.download_media(
                 getattr(getattr(self.last_message, self.last_message.media.value), "file_id")
@@ -183,10 +218,10 @@ class File(SendMethod):
     
     async def __call__(self, media: pyg_types.Object):
         send_method = self.get_send_method()
-        #Get file path in the string:
+        #Get file path as string, for example:
         #/code/src/downloads/photo_2024-11-20_13-52-12_7439358946990620672.jpg
         try:
-            file_path = await self.get_binIO()
+            file_path = await self.get_file()
         except FileReferenceExpired:
             logger.warning(f"Message wasn't sent. `file_id` of attached content was expired.")
             return
@@ -270,18 +305,40 @@ class Voice(File):
 
 
 async def send(message: types.Message, last_message: pyg_types.Message, reply_markup: KeyboardBuilder):
+    """
+    Middleware between pyrogram message `last_message` and sender as a found method 
+    of sending throght aiogram
+
+    I.e. Basing of type message info `last_message.media.value`, text or something 
+    other finds corresponding sender class in this module or misses this message
+    `last_message`
+    -----------
+    Parameters:
+
+    message: aiogram.types.Message
+             A original user message with text command in the bot
+
+    last_message: pyrogram.types.Message
+                  Detected and unprocessed new message in source chat
+                  which required to send to the bot
+
+    reply_markup: aiogram.utils.keyboard.KeyboardBuilder
+                  instance of this type, which build the keyboard
+    """
     media = None
     if last_message.media:
         media = getattr(last_message, last_message.media.value)
         class_name = last_message.media.value.title().replace("_", "")
         sender = globals().get(class_name, "Text")
+        logger.info(f"Class name MEDIA: {class_name}, id: {last_message.id}")
     elif last_message.service:
-        logger.info(f"Pass a service message, id: {last_message.id}")
+        logger.info(f"Miss a service message, id: {last_message.id}")
         return
     elif last_message.empty:
-        logger.info(f"Pass an empty message, id: {last_message.id}")
+        logger.info(f"Miss an empty message, id: {last_message.id}")
         return
     else:
+        logger.info(f"FORWARD id: {last_message.forward_from_message_id}, id: {last_message.id}, text: {last_message.text}")
         sender = Text
         if not last_message.text:
             logger.info(f"Unrecognized type of message {last_message}, id: {last_message.id}, `Text` will be used for this one.")

@@ -1,3 +1,7 @@
+"""
+Module with field validators
+"""
+
 from pyrogram.errors import exceptions
 from sqlalchemy.orm import validates
 
@@ -7,6 +11,9 @@ pyrogram_service = PyrogramService.get_instance()
 
 
 class ChannelValidatorMixin:
+    """
+    Mixin for applying for telegram channel name string fields
+    """
 
     @validates('channel_name')
     def validate_channel_name(self, key, channel_name: str):

@@ -1,3 +1,8 @@
+"""
+Functional for monitoring new messages from source chat and sending them to the bot.
+I.e. our bot 'monitors' new messages in source chat and notify us about them.
+"""
+
 import asyncio
 import time
 from typing import Optional
@@ -23,6 +28,18 @@ ME = bot.id
 TIMELAP_MESSAGE = 2
 
 async def send_media_group(media_group: List[pyg_types.Message], state: FSMContext):
+    """
+    Send messages if they were grouped in one post (media group)
+
+    -----------
+    Parameters:
+
+    media_group: List[pyg_types.Message] 
+                 List of messages which require to send
+
+    state: aiogram.fsm.context.FSMContext 
+           A machine of states which set `approve_post` state after sending message/s
+    """
     if media_group:
         while True:
             try:
@@ -39,7 +56,22 @@ async def send_media_group(media_group: List[pyg_types.Message], state: FSMConte
                 break
     media_group.clear()
 
-async def process_next_post(message: types.Message, state: FSMContext, source_channel: Optional[str] = None):
+async def process_next_post(message: types.Message, state: FSMContext, source_channel: Optional[str]=None):
+    """
+    Check if chat `source_channel` consists a new unprocessed message and send it to the bot
+
+    -----------
+    Parameters:
+
+    message: aiogram.types.Message
+             User instruction Message object
+
+    state: aiogram.fsm.context.FSMContext 
+           A machine of states which set `approve_post` state after sending message/s
+
+    source_channel: str | None 
+                    Chat where we retrieve messages from
+    """
     data = await state.get_data()
     source_channel = source_channel if source_channel else data.get('source_channel')
     if not source_channel:
@@ -126,6 +158,30 @@ async def send_content_message(destination_channel: str, modified_content: Optio
 
 async def monitor_channel_and_notify(message: types.Message, state: FSMContext, source_channel: str,
                                      destination_channel: str, user_id: int):
+    """
+    Investigate chat `source_channel` for new messages every minute and send them to the bot.
+    Also it notify about `destination_channel`
+
+    -----------
+    Parameters:
+
+    message: aiogram.types.Message
+             User instruction Message object
+
+    state: aiogram.fsm.context.FSMContext 
+           A machine of states which set `approve_post` state after sending message/s 
+           in `process_next_post` method
+
+    source_channel: str | None 
+                    Chat where we retrieve messages from
+
+    destination_channel: str | None 
+                         Chat where messages will be sent (notify only)
+
+    user_id: int 
+             id of user that monitors `source_channel` as one of their own chats  
+             as a part of composite key to get `Source_Channel` object
+    """
     while True:
         # Получаем последнее сообщение из исходного канала
         last_message = await pyrogram_service.get_last_message(source_channel)

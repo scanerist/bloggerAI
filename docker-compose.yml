@@ -13,9 +13,8 @@ services:
     restart:
         unless-stopped
   bot:
-    container_name: bot_ai_debug
     build:
-      context: .
+      context: .docker
       dockerfile: Dockerfile
     env_file:
       ./.env

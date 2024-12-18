@@ -1,5 +1,4 @@
 from services.bot.keyboards import back_button
-from services.shared.logger import setup_logger
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 from services.database.dao import get_all_destination_channels_by_user_id, get_all_source_channels_by_user_id, get_all_instructions_by_user_id

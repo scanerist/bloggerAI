@@ -7,7 +7,7 @@ from services.bot.keyboards import main_menu_keyboard
 back_router = Router()
 @back_router.callback_query(F.data == "back")
 async def process_back(callback_query: types.CallbackQuery, state: FSMContext):
-    """Обработчик возврата на главное меню."""
+    """Handler to back to the main menu."""
     await callback_query.message.bot.delete_message(callback_query.message.chat.id, callback_query.message.message_id)
     await start_handler(callback_query.message, state)
     await state.clear()
