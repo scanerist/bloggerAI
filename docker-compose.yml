@@ -23,5 +23,5 @@ services:
     tty: true
     depends_on: 
       - database
-
-    
+    volumes:
+      - ./logs:/code/src/logs
