@@ -1,6 +1,8 @@
 """
 Functional for monitoring new messages from source chat and sending them to the bot.
-I.e. our bot 'monitors' new messages in source chat and notify us about them.
+
+I.e. our bot 'monitors' new messages in source chat and notify us about them, 
+also can to change text attributes via openAI.
 """
 
 import asyncio
@@ -10,55 +12,57 @@ from typing import Optional
 from aiogram import types
 from aiogram.fsm.context import FSMContext
 from pyrogram import types as pyg_types
-from typing import List
 
 from services.bot.keyboards import post_approval_keyboard
 from services.pyrogram_service.pyrogram_client import PyrogramService
-from services.bot.senders import send
+from services.bot import senders
 from services.bot.state_manager import Form
-from services.bot.bot import BloggerAiBot
 from services.database.dao import update_source_channel
 from services.database.dao import get_message_id_from_source_channel_by_user_id
+from services.shared.config import Config
 from services.shared.logger import setup_logger
+from typing import List
 
-bot = BloggerAiBot().get_bot()
 logger = setup_logger(__name__)
 pyrogram_service = PyrogramService.get_instance()
-ME = bot.id
+
 TIMELAP_MESSAGE = 2
 
+
 async def send_media_group(media_group: List[pyg_types.Message], state: FSMContext):
-    """
-    Send messages if they were grouped in one post (media group)
+        """
+        Send messages if they were grouped in one post (media group)
 
-    -----------
-    Parameters:
+        -----------
+        Parameters:
 
-    media_group: List[pyg_types.Message] 
-                 List of messages which require to send
+        media_group: List[pyg_types.Message] 
+                     List of messages which are required to send
 
-    state: aiogram.fsm.context.FSMContext 
-           A machine of states which set `approve_post` state after sending message/s
-    """
-    if media_group:
-        while True:
-            try:
-                await pyrogram_service.client.send_media_group(
-                    chat_id=ME, media=media_group
-                )
-            except Exception as e:
-                logger.info(
-                    f"While media group messages with media_group_id={media_group[0].media_group_id} "\
-                    f"are sending an error was occured - {e}"
-                )
-            else:
-                await state.set_state(Form.approve_post)
-                break
-    media_group.clear()
+        state: aiogram.fsm.context.FSMContext 
+                A machine of states which set `approve_post` state after sending message/s
+        """
+        
+        if media_group:
+            while True:
+                try:
+                    await pyrogram_service.client.send_media_group(
+                        chat_id=Config.BOT_USERNAME, 
+                        media=media_group
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"While media group messages are sending an error was occured - {e}"
+                    )
+                    break
+                else:
+                    await state.set_state(Form.approve_post)
+                    break
+        media_group.clear()
 
 async def process_next_post(message: types.Message, state: FSMContext, source_channel: Optional[str]=None):
     """
-    Check if chat `source_channel` consists a new unprocessed message and send it to the bot
+    Checks if chat `source_channel` could consist a new unprocessed message and send it to the bot
 
     -----------
     Parameters:
@@ -67,7 +71,7 @@ async def process_next_post(message: types.Message, state: FSMContext, source_ch
              User instruction Message object
 
     state: aiogram.fsm.context.FSMContext 
-           A machine of states which set `approve_post` state after sending message/s
+           A machine of states which set `approve_post` state after sending message
 
     source_channel: str | None 
                     Chat where we retrieve messages from
@@ -80,7 +84,8 @@ async def process_next_post(message: types.Message, state: FSMContext, source_ch
 
     last_message = await pyrogram_service.get_last_message(source_channel)
     last_processed_message_id = await get_message_id_from_source_channel_by_user_id(
-        source_channel, message.from_user.id
+        channel_name=source_channel, 
+        user_id=message.from_user.id
     ) or last_message.id - 1
     await update_source_channel(source_channel, last_message.id)
     await state.update_data(last_processed_message_id=last_message.id)
@@ -88,14 +93,19 @@ async def process_next_post(message: types.Message, state: FSMContext, source_ch
     last_processed_media_group_id = 0
     media_group = []
     offset = last_message.id + 1
-
+    iteration = 1
     while True:
         last_messages = pyrogram_service.get_last_messages(
             source_channel, 
             offset
         )
         async for last_message in last_messages:
-            
+            logger.debug(
+                f"Iteration No.: {iteration} "\
+                f"id of current message: {last_message.id}, "\
+                f"id of last processed message: {last_processed_message_id}"
+            )
+            iteration +=1
             if last_message.id <= last_processed_message_id:
                 await send_media_group(media_group, state)
                 await message.answer(
@@ -129,16 +139,17 @@ async def process_next_post(message: types.Message, state: FSMContext, source_ch
 
             if last_message.media_group_id:
                 try: 
-                    input = getattr(pyg_types, f"InputMedia{media.__class__.__name__}")
+                    classname_media = senders.get_classname_media(last_message.media)
+                    input = getattr(pyg_types, f"InputMedia{classname_media}")
                 except AttributeError:
-                    logger.info(f"Class input media named {media.__name__} wasn't found in the using version of pyrogram.")
+                    logger.info(f"Class input media named {classname_media} wasn't found in the using version of pyrogram.")
                     continue
                 media_instance: pyg_types.InputMedia = input(media=media.file_id)
                 attached_text = last_message.text or last_message.caption
-                media_instance.caption = attached_text
+                media_instance.caption, _ = senders.Base.cut_text(attached_text)
                 media_group.append(media_instance)
             else:
-                await send(message, last_message, post_approval_keyboard())
+                await senders.send(message, last_message, post_approval_keyboard())
             await state.set_state(Form.approve_post)
             time.sleep(TIMELAP_MESSAGE)
             
@@ -159,8 +170,8 @@ async def send_content_message(destination_channel: str, modified_content: Optio
 async def monitor_channel_and_notify(message: types.Message, state: FSMContext, source_channel: str,
                                      destination_channel: str, user_id: int):
     """
-    Investigate chat `source_channel` for new messages every minute and send them to the bot.
-    Also it notify about `destination_channel`
+    Investigates chat `source_channel` for new messages every minute and send them to the bot.
+    Also it notifies about `destination_channel`
 
     -----------
     Parameters:
@@ -170,7 +181,6 @@ async def monitor_channel_and_notify(message: types.Message, state: FSMContext, 
 
     state: aiogram.fsm.context.FSMContext 
            A machine of states which set `approve_post` state after sending message/s 
-           in `process_next_post` method
 
     source_channel: str | None 
                     Chat where we retrieve messages from
@@ -179,8 +189,8 @@ async def monitor_channel_and_notify(message: types.Message, state: FSMContext, 
                          Chat where messages will be sent (notify only)
 
     user_id: int 
-             id of user that monitors `source_channel` as one of their own chats  
-             as a part of composite key to get `Source_Channel` object
+             id of user that monitors `source_channel`
+             It's a part of composite key to get `Source_Channel` object
     """
     while True:
         # Получаем последнее сообщение из исходного канала

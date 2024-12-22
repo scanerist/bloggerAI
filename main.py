@@ -12,8 +12,8 @@ from services.shared.logger import setup_logger
 logger = setup_logger(__name__)
 
 blogger_bot = BloggerAiBot()
-dp = blogger_bot.get_dispatcher()
 bot = blogger_bot.get_bot()
+dp = blogger_bot.get_dispatcher()
 
 POLLING_TIMEOUT = 10
 

@@ -6,7 +6,7 @@ throught aiogram.types.Message object
 import re
 import time
 
-from aiogram import types
+from aiogram import Bot, types
 from aiogram.exceptions import TelegramNetworkError
 from aiogram.utils.keyboard import KeyboardBuilder
 from pydantic import ValidationError
@@ -14,17 +14,31 @@ from pyrogram.errors import FileReferenceExpired
 import pyrogram.types as pyg_types
 
 from services.pyrogram_service.pyrogram_client import PyrogramService
+from services.shared.config import Config
 from services.shared.logger import setup_logger
+from typing import Union
 
+bot = Bot(token=Config.BOT_TOKEN)
 logger = setup_logger(__name__)
 pyrogram_service = PyrogramService.get_instance()
+FILE_SIZE_LIMIT = 50 #No more than 50 Mb
+TEXT_SIZE_LIMIT = 1024 #No more than 1024 characters
+
+def get_classname_media(media: pyg_types.Object):
+    """
+    Returns class name for message's media attribute 
+    """
+    if media.value:
+        return media.value.title().replace("_", "")
+    else:
+        return str(media)
 
 class Base():
     """
     Class with functional, which sets basic parameters:
     text attributes and `reply_markup` for sending messages
     considering telegram api limitations and sends messages of 
-    pyrogram.types.Message throght aiogram
+    pyrogram.types.Message type throght aiogram
     """
 
     def __init__(
@@ -49,50 +63,89 @@ class Base():
         if full_rewrite:
             self.kwargs = params
 
-    def set_params(self, media: pyg_types.Object=None):
-        new_caption = self.caption
-        new_text = self.text
+    @classmethod
+    def cut_text(self, caption: Union[str, None]=None, text: Union[str, None]=None):
+        """
+        Cut message's text attributes `caption`, `text` and return new values of them
 
-        if self.caption:
-            if len(self.caption) > 1024:
-                new_caption = self.caption.split(".")[0]
-                new_text = self.caption + "\n\b"
-                new_text = new_text + self.text if self.text else new_text
-            while len(new_caption) > 1024:
-                new_caption = new_caption.split(" ")
-                index, _ = list(re.finditer(r"[\s]+|[\S]+", new_caption))[-1].span()
+        ----------
+        Parameters
+
+        caption: str
+
+        text: str
+
+        -------
+        Returns
+
+        text_attributes: tuple(new_caption: str, new_text: str) 
+
+        where:
+        
+        new_caption: str
+                     New value for message's attribute `caption`
+
+        new_text: str
+                  New value for message's attribute `text`
+        """
+        new_caption = caption
+        new_text = text
+        if caption:
+            if len(caption) > TEXT_SIZE_LIMIT:
+                new_caption = caption.split(".")[0]
+                new_text = caption + "\n\b"
+                new_text = new_text + text if text else new_text
+            while len(new_caption) > TEXT_SIZE_LIMIT:
+                index, _ = list(re.finditer(r"[\s]+|[\S]+", new_caption.split(" ")))[-1].span()
                 new_caption = new_caption[:index]
                 logger.info(f"New caption: {new_caption} was cuted at pos. {index}, {new_caption[index]}")
+        return new_caption, new_text
 
+
+    def set_params(self, media: pyg_types.Object=None):
+        new_caption, new_text = self.cut_text(self.caption, self.text)
         self.params["text"] = new_text
         self.params["caption"] = new_caption
         self.params["reply_markup"] = self.reply_markup
 
-    async def send(self, media: pyg_types.Object=None, **kwargs):
+    async def send(self, *args, **kwargs):
+        try:
+            media = args[0]
+        except IndexError:
+            media=kwargs.get("media")
         self.set_params(media)
-        await self.message.answer(
-            **self.params,
-            **self.kwargs
-        )
+        forward_from_message_id = self.last_message.forward_from_message_id
+        if not any((self.caption, self.text)) and forward_from_message_id:
 
-    async def __call__(self, media: pyg_types.Object, **kwargs):
-        await self.send(media, **kwargs)
+            forwarded_message = await pyrogram_service.get_messages(
+                chat_id=self.last_message.forward_from_chat.id,
+                message_id=forward_from_message_id
+            )
+            await send(self.message, forwarded_message, self.reply_markup)
+        else:
+            await self.message.answer(
+                **self.params,
+                **self.kwargs
+            )
+
+    async def __call__(self, *args, **kwargs):
+        await self.send(*args, **kwargs)
 
 class SendMethod(Base):
     """
-    Aim of this class is the same as `Base` except for 
-    this class for such single messages which includes 
-    additional media attribute than just only text
+    Aim of this class is the same as class `Base` except for 
+    support an additional media content than just only text
+    if the message includes such content.
 
     Applies for such types of messages which includes 
-    specific content besides the text
+    a specific content besides the text
     """
 
     async def __call__(self, media: pyg_types.Object, **kwargs):
         method = self.get_send_method()
-        await self.send(media, method, **kwargs)
+        await self.send(method, media)
 
-    async def send(self, method: callable=None, media: pyg_types.Object=None, **kwargs):
+    async def send(self, method: callable=None, media: pyg_types.Object=None):
         self.set_params(media)
         await method(
             **self.params,
@@ -101,14 +154,19 @@ class SendMethod(Base):
 
     def get_send_method(self,) -> callable:
         """
-        Seek sending method in aiogram.types.Message
+        Finds the sending method in aiogram.types.Message
+
+        -------
+        Returns
+
+        send_method: aiogram.types.message.answer_<A_TYPE_OF_MESSAGE>
         """
         try:
             method_name = self.last_message.media.value
             return getattr(self.message,  f"answer_{method_name}")
         except AttributeError as e:
             raise AttributeError(
-                f"Method {method_name} of sending a message is absent in the using module - {e}."\
+                f"Method {method_name} of sending message is absent in the using module - {e}."\
                 "Check aiogram version is v >= 3.13"
             )
 
@@ -194,19 +252,19 @@ class Venue(SendMethod):
 
 class File(SendMethod):
     """ 
-    This class do same work as `SendMethod` except for 
-    additional media content of such messages is file and supports
-    related i/o actions
+    This class does the same work as `SendMethod` class except for 
+    support the additional media content as a file and related i/o actions.
 
     Applies for such types of messages which includes a file.
     """
 
     async def get_file(self) -> str:
         """
-        Download and save file at server
+        Download and save the file at the server
 
         -------
         Returns
+
         file_path: str 
                    File path
         """
@@ -218,12 +276,20 @@ class File(SendMethod):
     
     async def __call__(self, media: pyg_types.Object):
         send_method = self.get_send_method()
-        #Get file path as string, for example:
-        #/code/src/downloads/photo_2024-11-20_13-52-12_7439358946990620672.jpg
-        try:
+        message_id = self.last_message.id
+        file_size = media.file_size / (10**6)
+
+        if file_size > FILE_SIZE_LIMIT:
+            logger.warning(
+                f"Message with id={message_id} wasn't sent. Too large attached content."\
+                f"File size should be smaller than 50 Mb. Sending file's size is {file_size} Mb"
+            )
+            return
+        try: 
+            #Get file path as string, for example: '/code/src/downloads/photo.jpg'
             file_path = await self.get_file()
         except FileReferenceExpired:
-            logger.warning(f"Message wasn't sent. `file_id` of attached content was expired.")
+            logger.warning(f"Message with id={message_id} wasn't sent. `file_id` of attached content was expired.")
             return
         file_name = file_path.split("/")[-1]
         file_bytes = b""
@@ -306,17 +372,17 @@ class Voice(File):
 
 async def send(message: types.Message, last_message: pyg_types.Message, reply_markup: KeyboardBuilder):
     """
-    Middleware between pyrogram message `last_message` and sender as a found method 
-    of sending throght aiogram
+    Sends message to the bot. Middleware between pyrogram message `last_message` 
+    and sender as a found method of sending throght aiogram
 
     I.e. Basing of type message info `last_message.media.value`, text or something 
-    other finds corresponding sender class in this module or misses this message
+    other it finds corresponding sender class in this module or misses this message
     `last_message`
     -----------
     Parameters:
 
     message: aiogram.types.Message
-             A original user message with text command in the bot
+             A original user message with text command in the bot's chat
 
     last_message: pyrogram.types.Message
                   Detected and unprocessed new message in source chat
@@ -328,9 +394,8 @@ async def send(message: types.Message, last_message: pyg_types.Message, reply_ma
     media = None
     if last_message.media:
         media = getattr(last_message, last_message.media.value)
-        class_name = last_message.media.value.title().replace("_", "")
+        class_name = get_classname_media(last_message.media)
         sender = globals().get(class_name, "Text")
-        logger.info(f"Class name MEDIA: {class_name}, id: {last_message.id}")
     elif last_message.service:
         logger.info(f"Miss a service message, id: {last_message.id}")
         return
@@ -338,7 +403,6 @@ async def send(message: types.Message, last_message: pyg_types.Message, reply_ma
         logger.info(f"Miss an empty message, id: {last_message.id}")
         return
     else:
-        logger.info(f"FORWARD id: {last_message.forward_from_message_id}, id: {last_message.id}, text: {last_message.text}")
         sender = Text
         if not last_message.text:
             logger.info(f"Unrecognized type of message {last_message}, id: {last_message.id}, `Text` will be used for this one.")

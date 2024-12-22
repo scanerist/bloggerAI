@@ -1,7 +1,6 @@
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from services.shared.config import Config
-from aiogram.types import BotCommand
 
 class BloggerAiBot:
     def __init__(self):
@@ -14,8 +13,3 @@ class BloggerAiBot:
 
     def get_bot(self) -> Bot:
         return self.bot
-
-
-
-
-

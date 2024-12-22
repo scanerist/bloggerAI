@@ -1,10 +1,12 @@
 from collections.abc import AsyncGenerator
+from typing import List, Union
 
 from pyrogram import Client
 import pyrogram.types as pyg_types
 
 from services.shared.config import Config
 from services.shared.logger import setup_logger
+
 
 logger = setup_logger(__name__)
 
@@ -41,6 +43,9 @@ class PyrogramService:
         async for message in self.client.get_chat_history(channel, offset_id=last_id, limit=limit):
             logger.info(f"message: {message}")
             yield message
+    
+    async def get_messages(self, chat_id: Union[str, int], message_id: Union[int, List[int]]):
+        return (await self.client.get_messages(chat_id, message_id))
 
     async def send_message(self, channel: str, text: str, photo=None, video=None, audio=None, voice=None):
         if photo:
